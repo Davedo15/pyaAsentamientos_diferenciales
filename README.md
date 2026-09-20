@@ -1,293 +1,617 @@
-# [pymas](https://github.com/rvcristiand/pymas)
-![GitHub licence](https://img.shields.io/github/license/rvcristiand/pymas)
-![GitHub Release](https://img.shields.io/github/v/release/rvcristiand/pymas) <!-- ![GitHub contributors](https://img.shields.io/github/contributors-anon/rvcristiand/pymas) -->
-![GitHub top language](https://img.shields.io/github/languages/top/rvcristiand/pymas) <!-- ![GitHub code size in bytes](https://img.shields.io/github/languages/code-size/rvcristiand/pymas) -->
-![GitHub commits since latest release](https://img.shields.io/github/commits-since/rvcristiand/pymas/latest)
-![GitHub last commit](https://img.shields.io/github/last-commit/rvcristiand/pymas)
-![GitHub Downloads (all assets, all releases)](https://img.shields.io/github/downloads/rvcristiand/pymas/total)
-[![GitHub stars](https://img.shields.io/github/stars/rvcristiand/pymas)]()
-<!-- ![GitHub forks](https://img.shields.io/github/forks/rvcristiand/pymas) -->
+# Análisis de Asentamientos Diferenciales con pymas
 
-Model and analyze framed structures with [Python](https://www.python.org/).
+## Descripción
 
-## Table of Contents 
-- [Background](#background)
-- [Install](#install)
-- [Usage](#usage)
-- [Contributing](#contributing)
-- [License](#license)
+Este proyecto desarrolla una herramienta para analizar el efecto de **asentamientos diferenciales en estructuras aporticadas**, utilizando como base la librería de análisis estructural **pymas**.
 
-## Background
-pymas is a Python package that implements the [direct stiffness method](https://en.wikipedia.org/wiki/Direct_stiffness_method) to help you model and analyze linear elastic framed structures under static loads. 
+El objetivo principal es estudiar cómo el descenso vertical de una cimentación o apoyo modifica el comportamiento de la estructura, especialmente la distribución de momentos flectores en las vigas.
 
-<!-- It offers a clear and intuitive object-oriented interface for defining structural elements, materials, loads, and supports. -->
+El proyecto utiliza el método matricial de rigidez y permite representar un asentamiento mediante un **desplazamiento impuesto** en uno de los apoyos.
 
-<!-- ### Key Features -->
-<!-- * **Intuitive API:** Define structures, materials, and sections with a straightforward and clear syntax. -->
-<!-- * **Element Support:** Easily define and work with truss, beam and frame 2D or 3D elements. -->
-<!-- * **Extensible Design:** The architecture allows for future expansion to include more complex elements and analysis types. -->
-<!-- * **Open-Source:** Freely available for use, modification, and distribution under the MIT License. -->
+Se analizan tres escenarios:
 
-## Install
-You can install pymas using [pip](https://pip.pypa.io/en/stable/):
+- Sin asentamiento: **0 cm**
+- Asentamiento moderado: **2 cm**
+- Asentamiento severo: **5 cm**
 
-```
-pip install git+https://github.com/rvcristiand/pymas.git
-```
+---
 
-<details>
-	<summary><b>Manual Installation</b></summary>
-	<p>You can obtain a copy of pymas from <a href="https://github.com/rvcristiand/pymas">its repository</a> by downloading a ZIP archive, or by cloning it using <a href="https://git-scm.com/">Git</a>:</p>
-	<pre><code class="language-bash">git clone https://github.com/rvcristiand/pymas.git</code></pre>
-	<p>To install pymas, navigate to the project directory in your terminal and run:</p>
-	<pre><code class="language-bash">pip install .</code></pre>
-	<p>This will install pymas and any required dependencies.</p>
-</details>
+## Problema de ingeniería
 
-## Usage 
-You can model and analyze linear elastic framed structures using the [Structure](https://github.com/rvcristiand/pymas/blob/74305d1df22b4b534f352d23f9316267b7b17998/src/pymas/core.py#L8) class.
+En una estructura real, las cimentaciones pueden experimentar desplazamientos debido a diferentes condiciones del suelo, entre ellas:
 
-### Examples
+- Consolidación del terreno.
+- Variaciones en la capacidad portante.
+- Cambios de humedad.
+- Excavaciones cercanas.
+- Rellenos deficientemente compactados.
+- Diferencias en las cargas transmitidas por las columnas.
 
-<details markdown="1">
-<summary><b>Simple beam</b></summary>
-The following code models a simple concrete beam subjected to its self weight and outputs key results:
+Cuando una cimentación se desplaza más que otra se genera un **asentamiento diferencial**.
 
-```python
-from pymas import Structure
+Este movimiento puede producir:
 
-# model simple beam
+- Redistribución de momentos.
+- Incremento de esfuerzos internos.
+- Cambios en las reacciones de apoyo.
+- Deformaciones adicionales.
+- Fisuración de elementos estructurales y no estructurales.
+- Necesidad de reforzamiento estructural.
 
-# model and analyze a simple concrete beam subjected to its self weight
+---
 
-# dimensions of the rectangular cross section
-b = 0.5  # width, m
-h = 1    # heigh, m
+## Objetivo general
 
-# length and stiffness modulus
-L = 10                 # length, m
-E = 4700*28**0.5*1000  # stiffness module, kN/m2
+Implementar un análisis computacional que permita evaluar la influencia de asentamientos diferenciales sobre una estructura aporticada mediante desplazamientos impuestos en sus apoyos.
 
-# cross-sectional area and self weight
-A = b*h  # cross-sectional area, m2
-w = 24*A   # self weight per length, kN/m
+---
 
-# create the model
-model = Structure(type='beam')
+## Objetivos específicos
 
-# add materials
-model.add_material('concrete 28 MPa', E)
+1. Crear un modelo estructural utilizando `pymas`.
+2. Construir la matriz global de rigidez de la estructura.
+3. Aplicar un desplazamiento vertical conocido en un apoyo.
+4. Resolver el sistema estructural mediante partición matricial.
+5. Calcular los desplazamientos nodales.
+6. Obtener las reacciones de los apoyos.
+7. Calcular los momentos flectores de las vigas.
+8. Comparar los resultados para asentamientos de 0, 2 y 5 cm.
+9. Generar gráficas para facilitar la interpretación de resultados.
+10. Estimar de forma paramétrica el posible impacto económico asociado al aumento de demanda estructural.
 
-# add sections
-model.add_rectangular_section('0.5x1.0', base=b, height=h)
+---
 
-# add joints
-model.add_joint('a', x=0)
-model.add_joint('b', x=L)
+# Modelo estructural
 
-# add frame
-model.add_frame('beam', 'a', 'b', 'concrete 28 MPa', '0.5x1.0', bending_z=True)
+Se utiliza un pórtico plano compuesto por:
 
-# add supports
-model.add_support('a', r_uy=True)
-model.add_support('b', r_uy=True)
+- 3 columnas.
+- 2 vigas.
+- 6 nodos.
+- 3 apoyos empotrados.
 
-# add load patterns
-model.add_load_pattern('self weight')
+La geometría utilizada es:
 
-# add distributed loads
-model.add_distributed_load('self weight', 'beam', fy=-w)
-
-# analyze the model
-model.run_analysis()
-model.export('simple_beam.json')
-
-print(f'Θa: {model.displacements['self weight']['a'].rz:+.3e} rad')
-print(f'Θb: {model.displacements['self weight']['b'].rz:+.3e} rad')
-print(f'Ra: {model.reactions['self weight']['a'].fy:+.1f} kN')
-print(f'Rb: {model.reactions['self weight']['b'].fy:+.1f} kN')
-print(f'Mmax: {max(model.internal_forces['self weight']['beam'].mz):.1f} kN m')
-print(f'νmax: {min(model.internal_displacements['self weight']['beam'].uy):.3e} m')
+```text
+D -------- E -------- F
+|          |          |
+|          |          |
+|          |          |
+A          B          C
+           ↓
+      Asentamiento
 ```
 
-<b>Output</b>
+Características geométricas:
 
-```python
-Θa: -4.825e-04 rad
-Θb: +4.825e-04 rad
-Ra: +60.0 kN
-Rb: +60.0 kN
-Mmax: 150.0 kN m
-νmax: -1.508e-03 m
-```
-</details>
+| Elemento | Dimensión |
+|---|---:|
+| Luz V1 | 5 m |
+| Luz V2 | 5 m |
+| Altura de columnas | 3 m |
+| Columnas | 0.40 x 0.40 m |
+| Vigas | 0.30 x 0.50 m |
 
-<details markdown="1">
-<summary><b>Space truss</b></summary>
-The following code models a space truss subject to points loads at their joints and outputs key results:
+El asentamiento se aplica en el apoyo central **B**.
 
-```python
-from pymas import Structure
+---
 
-"""
-Solution to problem 7.2 from 'Microcomputadores en Ingeniería Estructural'
-"""
-# create the model
-model = Structure(type='space_truss')
+# Casos analizados
 
-# add material
-model.add_material("2100 t/cm2", 2100e4)
+El programa estudia tres condiciones diferentes.
 
-# add sections
-model.add_section("10 cm2", 10e-4)
-model.add_section("20 cm2", 20e-4)
-model.add_section("40 cm2", 40e-4)
-model.add_section("50 cm2", 50e-4)
+### Caso 1 — Estado de referencia
 
-# add joints
-model.add_joint('1', 2.25, 6, 4.8)
-model.add_joint('2', 3.75, 6, 2.4)
-model.add_joint('3', 5.25, 6, 4.8)
-model.add_joint('4', 0.00, 0, 6.0)
-model.add_joint('5', 3.75, 0, 0.0)
-model.add_joint('6', 7.50, 0, 6.0)
-
-# add frames
-model.add_frame('1-2', '1', '2', "2100 t/cm2", '20 cm2', axial=True)
-model.add_frame('1-3', '1', '3', "2100 t/cm2", '20 cm2', axial=True)
-model.add_frame('1-4', '1', '4', "2100 t/cm2", '40 cm2', axial=True)
-model.add_frame('1-6', '1', '6', "2100 t/cm2", '50 cm2', axial=True)
-model.add_frame('2-3', '2', '3', "2100 t/cm2", '20 cm2', axial=True)
-model.add_frame('2-4', '2', '4', "2100 t/cm2", '50 cm2', axial=True)
-model.add_frame('2-5', '2', '5', "2100 t/cm2", '40 cm2', axial=True)
-model.add_frame('3-5', '3', '5', "2100 t/cm2", '50 cm2', axial=True)
-model.add_frame('3-6', '3', '6', "2100 t/cm2", '40 cm2', axial=True)
-model.add_frame('4-5', '4', '5', "2100 t/cm2", '10 cm2', axial=True)
-model.add_frame('4-6', '4', '6', "2100 t/cm2", '10 cm2', axial=True)
-model.add_frame('5-6', '5', '6', "2100 t/cm2", '10 cm2', axial=True)
-
-# add supports
-model.add_support('4', True, True, True)
-model.add_support('5', True, True, True)
-model.add_support('6', True, True, True)
-
-# add load pattern
-model.add_load_pattern("point loads")
-
-# add point loads
-model.add_joint_point_load("point loads", '1', 10, 15, -12)
-model.add_joint_point_load("point loads", '2',  5, -3, -10)
-model.add_joint_point_load("point loads", '3', -4, -2,  -6)
-
-# analyze the model
-model.run_analysis()
-model.export('space_truss.json')
-
-for joint in ['1', '2', '3']:
-    print(f'joint: {joint}')
-    print(f'\tux: {model.displacements["point loads"][joint].ux:.3e} m')
-    print(f'\tux: {model.displacements["point loads"][joint].uy:.3e} m')
-    print(f'\tux: {model.displacements["point loads"][joint].uz:.3e} m')
+```text
+Asentamiento = 0 cm
 ```
 
-<b>Output</b>
+Representa la estructura sin movimiento diferencial de las cimentaciones.
 
-```python
-joint: 1
-	ux: 8.048e-04 m
-	ux: 3.326e-05 m
-	ux: -4.464e-03 m
-joint: 2
-	ux: 2.226e-03 m
-	ux: -7.277e-04 m
-	ux: -2.732e-03 m
-joint: 3
-	ux: 7.512e-04 m
-	ux: 3.670e-04 m
-	ux: -1.773e-03 m
-```
-</details>
+### Caso 2 — Asentamiento moderado
 
-<details markdown="1">
-<summary><b>Space frame</b></summary>
-The following code models a space frame subject to distributed loads and outputs key results:
-
-```python
-from pymas import Structure
-
-"""
-Solution to problem 7.6 from 'Microcomputadores en Ingeniería Estructural'
-"""
-
-# structure
-model = Structure('space_frame')
-
-# add material
-model.add_material('material1', 220e4, 85e4)
-
-# add sections
-model.add_section('section1', 0.12, 1.944e-3, 9e-4, 1.6e-3)
-model.add_section('section2', 0.10, 1.2734e-3, 1.333e-3, 5.208e-4)
-
-# add joints
-model.add_joint('1', 0, 3, 3)
-model.add_joint('2', 5, 3, 3)
-model.add_joint('3', 0, 0, 3)
-model.add_joint('4', 0, 3, 0)
-
-# add frames
-deformations = {
-    'axial': True,
-    'torsional': True,
-    'bending_y': True,
-    'bending_z': True
-}
-
-model.add_frame('1-2', '1', '2', 'material1', 'section1', **deformations)
-model.add_frame('4-1', '4', '1', 'material1', 'section2', **deformations)
-model.add_frame('3-1', '3', '1', 'material1', 'section1', **deformations)
-
-# add supports
-model.add_support('2', *6 * (True,))
-model.add_support('3', *6 * (True,))
-model.add_support('4', *6 * (True,))
-
-# add load pattern
-model.add_load_pattern("distributed loads")
-
-# add distributed loads
-model.add_distributed_load('distributed loads', '1-2', fy=-2.4)
-model.add_distributed_load('distributed loads', '4-1', fy=-3.5)
-
-# solve
-model.run_analysis()
-
-# export
-model.export('space_frame.json')
-
-print(model.displacements['distributed loads']['1'])
+```text
+Asentamiento apoyo B = -0.02 m
 ```
 
-<b>Output</b>
+Equivale a un descenso de:
 
-```python
-{'load_pattern': 'distributed loads', 'joint': '1', 'ux': 2.687315391431904e-05, 'uy': -0.00011574968996290452, 'uz': -1.000611510850756e-05, 'rx': -0.0005668526305782732, 'ry': 7.904785530558646e-06, 'rz': -0.0006309015221398215}
+```text
+2 cm
 ```
-</details>
 
-## Contributing
+### Caso 3 — Asentamiento severo
 
-You can contribute to this project creating a new [issue](https://github.com/rvcristiand/pymas/issues/new) or creating [pull requests](https://github.com/rvcristiand/pymas/pulls).
+```text
+Asentamiento apoyo B = -0.05 m
+```
 
-<!-- Contributions are welcome\! If you would like to contribute, please follow these steps: -->
+Equivale a un descenso de:
 
-<!-- 1.  Fork the repository. -->
-<!-- 2.  Create a new branch (`git checkout -b feature/your-feature-name`). -->
-<!-- 3.  Make your changes and commit them (`git commit -m 'Add new feature'`). -->
-<!-- 4.  Push your changes to the branch (`git push origin feature/your-feature-name`). -->
-<!-- 5.  Submit a [Pull Request](https://github.com/rvcristiand/pymas/pulls). -->
+```text
+5 cm
+```
 
-<!-- You can find [here](https://www.dataschool.io/how-to-contribute-on-github/) a good gide to this workflow. -->
+El signo negativo representa un desplazamiento vertical hacia abajo.
 
-## License
-[MIT](LICENSE)
+---
+
+# Fundamento matemático
+
+El análisis se basa en el método matricial de rigidez.
+
+La ecuación fundamental de una estructura puede expresarse como:
+
+```text
+K U = F
+```
+
+donde:
+
+- `K` = matriz global de rigidez.
+- `U` = vector de desplazamientos.
+- `F` = vector global de fuerzas.
+
+Cuando existen desplazamientos conocidos en los apoyos, los grados de libertad pueden dividirse entre:
+
+```text
+Uf = desplazamientos libres o desconocidos
+Uc = desplazamientos conocidos o impuestos
+```
+
+La matriz se particiona de la siguiente manera:
+
+```text
+| Kff  Kfc | | Uf |   | Ff |
+|          | |    | = |    |
+| Kcf  Kcc | | Uc |   | Fc |
+```
+
+Para los grados de libertad libres:
+
+```text
+Kff Uf + Kfc Uc = Ff
+```
+
+Por tanto:
+
+```text
+Kff Uf = Ff - Kfc Uc
+```
+
+Finalmente:
+
+```text
+Uf = Kff⁻¹ (Ff - Kfc Uc)
+```
+
+Esta formulación permite introducir un asentamiento conocido en el apoyo central sin representarlo como una fuerza externa.
+
+---
+
+# Desplazamientos impuestos
+
+En el modelo convencional, un apoyo restringido normalmente tiene:
+
+```text
+uy = 0
+```
+
+En este proyecto el apoyo central puede tener, por ejemplo:
+
+```text
+uy = -0.02 m
+```
+
+o:
+
+```text
+uy = -0.05 m
+```
+
+De esta manera se simula directamente el descenso de la cimentación.
+
+---
+
+# Propiedades utilizadas
+
+## Material
+
+Se utiliza un módulo de elasticidad aproximado del concreto de:
+
+```text
+E = 25 000 000 kN/m²
+```
+
+equivalente aproximadamente a:
+
+```text
+25 GPa
+```
+
+## Carga distribuida
+
+Las vigas V1 y V2 reciben una carga distribuida de:
+
+```text
+20 kN/m
+```
+
+aplicada verticalmente hacia abajo.
+
+---
+
+# Archivos principales
+
+El archivo principal del desarrollo es:
+
+```text
+asentamientos_diferenciales.py
+```
+
+Al ejecutar el programa se genera una carpeta:
+
+```text
+salida_asentamientos/
+```
+
+que contiene los resultados numéricos y gráficos.
+
+---
+
+# Resultados generados
+
+El programa genera automáticamente:
+
+```text
+salida_asentamientos/
+│
+├── resultados_asentamientos.csv
+│
+├── momento_vs_asentamiento.png
+├── incremento_momento_porcentaje.png
+├── diagrama_momento_0cm.png
+├── diagrama_momento_2cm.png
+├── diagrama_momento_5cm.png
+└── estructura_deformada_comparativa.png
+```
+
+---
+
+# Archivo CSV
+
+El archivo:
+
+```text
+resultados_asentamientos.csv
+```
+
+contiene información como:
+
+- Asentamiento aplicado.
+- Viga analizada.
+- Momento máximo.
+- Variación porcentual respecto al estado inicial.
+- Estimación paramétrica de sobrecosto.
+
+Esto permite llevar posteriormente los resultados a herramientas como Excel.
+
+---
+
+# Gráficos generados
+
+## Momento máximo vs. asentamiento
+
+El gráfico:
+
+```text
+momento_vs_asentamiento.png
+```
+
+muestra cómo cambia el momento máximo de las vigas conforme aumenta el asentamiento del apoyo central.
+
+---
+
+## Diagramas de momento flector
+
+El programa genera un diagrama para cada escenario:
+
+```text
+diagrama_momento_0cm.png
+diagrama_momento_2cm.png
+diagrama_momento_5cm.png
+```
+
+Estos gráficos permiten observar la redistribución de esfuerzos provocada por el asentamiento diferencial.
+
+---
+
+## Incremento porcentual del momento
+
+El archivo:
+
+```text
+incremento_momento_porcentaje.png
+```
+
+compara la variación porcentual del momento máximo tomando como referencia la estructura sin asentamiento.
+
+---
+
+## Estructura deformada
+
+El archivo:
+
+```text
+estructura_deformada_comparativa.png
+```
+
+presenta la geometría original junto con las estructuras deformadas para los diferentes niveles de asentamiento.
+
+Los desplazamientos se amplifican gráficamente para facilitar su visualización.
+
+La escala gráfica utilizada no modifica los resultados numéricos del análisis.
+
+---
+
+# Estimación de sobrecosto
+
+El programa incluye una estimación **paramétrica y académica** del posible impacto económico asociado al incremento de demanda estructural.
+
+Actualmente se utiliza un costo base de referencia por viga:
+
+```text
+$5.000.000 COP
+```
+
+y se relaciona con el incremento porcentual del momento.
+
+Este cálculo no debe interpretarse como un presupuesto estructural definitivo.
+
+Para realizar un cálculo económico real sería necesario determinar, entre otros:
+
+- Acero requerido.
+- Cuantías de refuerzo.
+- Secciones necesarias.
+- Mano de obra.
+- Materiales.
+- Demolición.
+- Reforzamiento.
+- Procedimientos constructivos.
+
+---
+
+# Requisitos
+
+Para ejecutar el proyecto se requiere:
+
+- Python 3
+- NumPy
+- Matplotlib
+- pymas
+
+---
+
+# Instalación
+
+## 1. Clonar el repositorio
+
+```bash
+git clone https://github.com/Davedo15/pyaAsentamientos_diferenciales.git
+```
+
+Entrar a la carpeta:
+
+```bash
+cd pyaAsentamientos_diferenciales
+```
+
+---
+
+## 2. Crear entorno virtual
+
+En Windows:
+
+```bash
+py -m venv .venv
+```
+
+Activarlo:
+
+```bash
+.venv\Scripts\activate
+```
+
+---
+
+## 3. Instalar pymas
+
+Como este proyecto está basado en el código fuente de pymas:
+
+```bash
+python -m pip install -e .
+```
+
+---
+
+## 4. Instalar Matplotlib
+
+```bash
+pip install matplotlib
+```
+
+---
+
+# Ejecución
+
+Para ejecutar el análisis:
+
+```bash
+python asentamientos_diferenciales.py
+```
+
+El programa mostrará en consola los momentos máximos obtenidos para cada escenario y posteriormente generará los archivos gráficos y el CSV.
+
+---
+
+# Ejemplo de salida en consola
+
+La salida tendrá una estructura similar a:
+
+```text
+==================================================================================
+ANÁLISIS DE ASENTAMIENTOS DIFERENCIALES
+==================================================================================
+
+ASENTAMIENTO DEL APOYO B: 0.0 cm
+----------------------------------------------------------------------------------
+
+V1: M máx = ... kN·m
+V2: M máx = ... kN·m
+
+
+ASENTAMIENTO DEL APOYO B: 2.0 cm
+----------------------------------------------------------------------------------
+
+V1: M máx = ... kN·m
+V2: M máx = ... kN·m
+
+
+ASENTAMIENTO DEL APOYO B: 5.0 cm
+----------------------------------------------------------------------------------
+
+V1: M máx = ... kN·m
+V2: M máx = ... kN·m
+```
+
+---
+
+# Interpretación
+
+El análisis permite estudiar cómo una deformación impuesta en una cimentación afecta la estructura superior.
+
+Incluso cuando las cargas gravitacionales permanecen iguales, un asentamiento diferencial puede generar nuevos esfuerzos debido a la compatibilidad de deformaciones entre columnas y vigas.
+
+Por esta razón, el asentamiento de una cimentación puede provocar:
+
+```text
+Asentamiento
+      ↓
+Cambio geométrico
+      ↓
+Compatibilidad estructural
+      ↓
+Redistribución de esfuerzos
+      ↓
+Cambio de momentos y reacciones
+      ↓
+Posible necesidad de reforzamiento
+```
+
+---
+
+# Limitaciones
+
+El modelo desarrollado corresponde a un análisis:
+
+- Lineal.
+- Elástico.
+- Estático.
+- Bidimensional.
+- Basado en elementos tipo pórtico.
+
+No se modelan directamente:
+
+- Plasticidad del concreto.
+- Fisuración.
+- Comportamiento no lineal.
+- Interacción suelo-estructura mediante elementos de suelo.
+- Consolidación geotécnica.
+- Capacidad portante de cimentaciones.
+- Licuación.
+- Comportamiento dinámico.
+- Daño progresivo.
+
+El asentamiento es introducido como un desplazamiento conocido previamente.
+
+---
+
+# Posibles mejoras futuras
+
+El proyecto puede ampliarse incorporando:
+
+- Resortes verticales para representar el suelo.
+- Módulos de reacción del terreno.
+- Asentamientos en múltiples apoyos.
+- Asentamientos horizontales.
+- Rotaciones impuestas.
+- Diferentes tipos de cimentación.
+- Análisis de varios pisos.
+- Análisis tridimensional.
+- Cálculo automático de acero de refuerzo.
+- Análisis económico detallado.
+- Interfaz gráfica.
+- Exportación de informes.
+- Comparación de múltiples escenarios.
+
+---
+
+# Tecnologías utilizadas
+
+- Python
+- NumPy
+- Matplotlib
+- pymas
+- Git
+- GitHub
+
+---
+
+# Proyecto base
+
+Este trabajo está desarrollado a partir del proyecto de código abierto:
+
+**pymas**
+
+Repositorio original:
+
+https://github.com/rvcristiand/pymas
+
+`pymas` implementa herramientas de análisis estructural mediante el método directo de rigidez.
+
+El repositorio original se mantiene configurado localmente como:
+
+```text
+upstream
+```
+
+mientras que este desarrollo utiliza:
+
+```text
+origin
+```
+
+para el repositorio correspondiente al proyecto de asentamientos diferenciales.
+
+---
+
+# Autor
+
+Proyecto académico desarrollado para el estudio de:
+
+**Análisis de Asentamientos Diferenciales en Estructuras Aporticadas mediante Desplazamientos Impuestos**
+
+---
+
+# Aviso
+
+Este software fue desarrollado con fines académicos y educativos.
+
+Los resultados obtenidos no sustituyen:
+
+- Estudios geotécnicos.
+- Diseños estructurales.
+- Revisiones realizadas por profesionales responsables.
+- Verificaciones exigidas por la normativa aplicable.
+
+Para aplicaciones reales, los resultados deberán ser revisados y validados por profesionales competentes.
