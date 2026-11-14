@@ -615,3 +615,54 @@ Los resultados obtenidos no sustituyen:
 - Verificaciones exigidas por la normativa aplicable.
 
 Para aplicaciones reales, los resultados deberán ser revisados y validados por profesionales competentes.
+---
+
+## Aplicación de escritorio (Proyecto 02)
+
+La interfaz de `main.py` permite ejecutar escenarios de asentamiento del apoyo B,
+visualizar momentos y diagrama de la viga V1, guardar y consultar proyectos en SQLite,
+eliminar proyectos con confirmación y exportar una memoria de cálculo Word con tablas
+y diagramas de las vigas V1 y V2.
+
+### Instalación
+
+Desde la raíz del repositorio, con Python 3.9 o superior:
+
+```powershell
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+python -m pip install -r requirements-app.txt
+```
+
+En Linux/macOS se activa el entorno con `source .venv/bin/activate`.
+
+### Ejecución
+
+```powershell
+python main.py
+```
+
+Ingrese asentamientos no negativos separados por punto y coma, por ejemplo `0;2;5`.
+Pulse **Ejecutar análisis estructural** antes de **Generar memoria de cálculo (Word)**.
+El documento se guarda como `memoria_calculo.docx` en la raíz del proyecto.
+Para sobrescribirlo, cierre previamente el documento en Microsoft Word.
+
+Los proyectos se almacenan en `datos/proyectos.db`; **conserve este archivo**
+cuando actualice el código. La exportación usa los resultados del último análisis
+realizado o del proyecto recuperado desde el historial.
+
+### Pruebas
+
+```powershell
+python -m pytest tests/test_app_asentamientos.py -q
+```
+
+Estas pruebas comprueban escenarios, entradas inválidas, generación Word y operaciones
+SQLite en una base de datos temporal. La interfaz Flet requiere validación manual en
+el equipo de destino.
+
+### Alcance técnico
+
+Los momentos máximos se reportan como magnitudes absolutas en kN·m; el asentamiento
+positivo de entrada representa descenso, transformado internamente en desplazamiento
+vertical negativo en metros. El informe no reemplaza la revisión de ingeniería.

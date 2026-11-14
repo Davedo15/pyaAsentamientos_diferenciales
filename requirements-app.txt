@@ -1,0 +1,6 @@
+# Instalar primero la biblioteca pymas del repositorio en modo editable.
+-e .
+flet
+matplotlib
+python-docx
+pytest

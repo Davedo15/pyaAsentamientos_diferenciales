@@ -6,13 +6,15 @@ Aplicacion de escritorio para el analisis
 de asentamientos diferenciales.
 """
 from io import BytesIO
+from pathlib import Path
+import matplotlib.pyplot as plt
 
 import flet as ft
 
 from app.modelo import calcular_asentamientos
 from app.graficas import crear_diagrama_momentos
 from app.db import guardar_proyecto, listar_proyectos, obtener_proyecto, eliminar_proyecto
-
+from app.reporte import generar_memoria_calculo
 
 
 def main(page: ft.Page):
@@ -40,10 +42,17 @@ def main(page: ft.Page):
         spacing=10
     )
 
+    calculos_actuales = []
+    entradas_actuales = []
+
     # Funcion para ejecutar el calculo
     def ejecutar_calculo(e):
 
+        nonlocal calculos_actuales, entradas_actuales
+
         resultados.controls.clear()
+        calculos_actuales = []
+        entradas_actuales = []
 
         try:
 
@@ -53,6 +62,9 @@ def main(page: ft.Page):
             ]
 
             calculos = calcular_asentamientos(valores)
+
+            calculos_actuales = calculos
+            entradas_actuales = valores
 
             for caso in calculos:
 
@@ -91,6 +103,7 @@ def main(page: ft.Page):
             )
 
             imagen.seek(0)
+            plt.close(figura)
 
             # Mostrar titulo de la grafica
             resultados.controls.append(
@@ -110,11 +123,72 @@ def main(page: ft.Page):
                 )
             )
 
-        except (ValueError, TypeError) as error:
+        except (ValueError, TypeError, KeyError) as error:
 
             resultados.controls.append(
                 ft.Text(
                     f"Error en los datos: {error}",
+                    color=ft.Colors.RED
+                )
+            )
+
+        page.update()
+
+    def exportar_memoria(e):
+
+        try:
+            if not calculos_actuales:
+                resultados.controls.append(
+                    ft.Text(
+                        "Primero debe ejecutar el análisis estructural.",
+                        color=ft.Colors.RED
+                    )
+                )
+                page.update()
+                return
+
+            datos_entrada = {
+                "Asentamientos aplicados (cm)": "; ".join(f"{v:g}" for v in entradas_actuales),
+                "Método de análisis": "Método matricial de rigidez"
+            }
+
+            resultados_informe = {}
+
+            for numero, caso in enumerate(calculos_actuales, start=1):
+
+                asentamiento = caso["asentamiento_cm"]
+
+                momento_v1 = caso["vigas"]["V1"]["momento_maximo_kNm"]
+                momento_v2 = caso["vigas"]["V2"]["momento_maximo_kNm"]
+
+                resultados_informe[f"Caso {numero}"] = (
+                    f"Asentamiento: {asentamiento:.2f} cm | "
+                    f"Momento máximo V1: {momento_v1:.3f} kN·m | "
+                    f"Momento máximo V2: {momento_v2:.3f} kN·m"
+                )
+
+            ruta_archivo = str(Path(__file__).resolve().parent / "memoria_calculo.docx")
+
+            generar_memoria_calculo(
+                nombre_proyecto.value or "Proyecto sin nombre",
+                datos_entrada,
+                resultados_informe,
+                ruta_archivo,
+                calculos=calculos_actuales
+            )
+
+            resultados.controls.append(
+                ft.Text(
+                    f"Memoria de cálculo generada: {ruta_archivo}",
+                    color=ft.Colors.GREEN
+                )
+            )
+
+        except Exception as error:
+
+            resultados.controls.append(
+                ft.Text(
+                    f"Error al generar memoria: {error}",
                     color=ft.Colors.RED
                 )
             )
@@ -161,45 +235,52 @@ def main(page: ft.Page):
     # Elementos de la interfaz
     vista_calculo = ft.Column(
         controls=[
-    
-        ft.Text(
-            "ANALISIS DE ASENTAMIENTOS DIFERENCIALES",
-            size=24,
-            weight=ft.FontWeight.BOLD
-        ),
 
-        ft.Text(
-            "Evaluacion estructural mediante "
-            "el metodo matricial de rigidez",
-            size=16
-        ),
+            ft.Text(
+                "ANALISIS DE ASENTAMIENTOS DIFERENCIALES",
+                size=24,
+                weight=ft.FontWeight.BOLD
+            ),
 
-        ft.Text(
-            "Ingrese los asentamientos en centimetros, "
-            "separados por punto y coma."
-        ),
+            ft.Text(
+                "Evaluacion estructural mediante "
+                "el metodo matricial de rigidez",
+                size=16
+            ),
 
-        asentamientos,
+            ft.Text(
+                "Ingrese los asentamientos en centimetros, "
+                "separados por punto y coma."
+            ),
 
-        ft.Button(
-            "Ejecutar analisis estructural",
-            on_click=ejecutar_calculo
-        ),
+            asentamientos,
 
-        ft.Text(
-            "RESULTADOS DEL ANALISIS",
-            size=18,
-            weight=ft.FontWeight.BOLD
-        ),
+            ft.Button(
+                "Ejecutar analisis estructural",
+                on_click=ejecutar_calculo
+            ),
 
-        nombre_proyecto,
-        ft.Button(
-            "Guardar proyecto",
-            on_click=guardar_calculo,
-        ),
+            ft.Text(
+                "RESULTADOS DEL ANALISIS",
+                size=18,
+                weight=ft.FontWeight.BOLD
+            ),
 
-        resultados
-    
+            nombre_proyecto,
+
+            ft.Button(
+                "Guardar proyecto",
+                on_click=guardar_calculo,
+            ),
+
+            resultados,
+
+            ft.Button(
+                "Generar memoria de cálculo (Word)",
+                icon=ft.Icons.DESCRIPTION,
+                on_click=exportar_memoria,
+            ),
+
         ]
     )
 
@@ -215,6 +296,7 @@ def main(page: ft.Page):
             eliminar_proyecto(proyecto_id)
 
             ventana.open = False
+            detalle_proyecto.visible = False
             cargar_historial()
 
             page.snack_bar = ft.SnackBar(
@@ -293,87 +375,52 @@ def main(page: ft.Page):
         scroll=ft.ScrollMode.AUTO,
     )
 
-    # Recuperar un proyecto guardado desde SQLite
+    # Recuperar y visualizar todos los escenarios guardados en SQLite.
     def abrir_proyecto(proyecto_id):
+        nonlocal calculos_actuales, entradas_actuales
         proyecto = obtener_proyecto(proyecto_id)
-
         if proyecto is None:
-            print("No se encontró el proyecto.")
+            detalle_proyecto.controls = [ft.Text("Proyecto no encontrado.")]
+            detalle_proyecto.visible = True
+            page.update()
             return
 
-        # Mostrar información del proyecto recuperado
         detalle_proyecto.controls.clear()
-
-        calculos_guardados = proyecto["calculos"]
-
-        resultados_guardados = (
-            calculos_guardados[0].get("resultados", {})
-            if calculos_guardados
-            else {}
-        )
-
-        vigas_guardadas = (
-        resultados_guardados[0].get("vigas", {})
-        if isinstance(resultados_guardados, list)
-        and resultados_guardados
-        else resultados_guardados.get("vigas", {})
-        if isinstance(resultados_guardados, dict)
-        else {}
-    )
-
-        detalle_proyecto.controls.extend([
-            ft.Text(
-                f"PROYECTO: {proyecto['nombre']}",
-                size=22,
-                weight=ft.FontWeight.BOLD,
-            ),
-            ft.Text(f"ID del proyecto: {proyecto['id']}"),
-            ft.Text(
-                "ASENTAMIENTOS APLICADOS",
-                size=18,
-                weight=ft.FontWeight.BOLD,
-            ),
-            ft.Text(
-                "Valores en centímetros: "
-                + "; ".join(
-                    str(valor)
-                    for valor in proyecto["calculos"][0]["datos_entrada"]["asentamientos_cm"]
-                )
-            ),
-            ft.Text("RESULTADOS ESTRUCTURALES", size=18),
-            ft.Text(
-                "MOMENTOS FLECTORES MÁXIMOS",
-                size=18,
-                weight=ft.FontWeight.BOLD,
-            ),
-
-            ft.Text(
-                f"Viga V1: "
-                f"{vigas_guardadas.get('V1', {}).get('momento_maximo_kNm', 'No disponible'): .3f} kN·m"
-            ),
-
-            ft.Text(
-                f"Viga V2: "
-                f"{vigas_guardadas.get('V2', {}).get('momento_maximo_kNm', 'No disponible'): .3f} kN·m"
-            ),
-            ft.Text(
-                "Información recuperada correctamente desde SQLite."
-            ),
-        ])
-
+        detalle_proyecto.controls.append(ft.Text(
+            f"PROYECTO: {proyecto['nombre']}",
+            size=22, weight=ft.FontWeight.BOLD
+        ))
+        detalle_proyecto.controls.append(ft.Text(f"ID: {proyecto['id']}"))
+        calculos_guardados = proyecto.get("calculos", [])
+        if not calculos_guardados:
+            detalle_proyecto.controls.append(ft.Text("Sin cálculos almacenados."))
+        else:
+            registro = calculos_guardados[0]
+            entradas = registro.get("datos_entrada", {}).get("asentamientos_cm", [])
+            casos = registro.get("resultados", [])
+            if isinstance(casos, dict):
+                casos = [casos]
+            detalle_proyecto.controls.append(ft.Text(
+                "Asentamientos (cm): " + "; ".join(str(x) for x in entradas)
+            ))
+            detalle_proyecto.controls.append(ft.Text(
+                "RESULTADOS ESTRUCTURALES", size=18, weight=ft.FontWeight.BOLD
+            ))
+            for caso in casos:
+                vigas = caso.get("vigas", {})
+                v1 = vigas.get("V1", {}).get("momento_maximo_kNm")
+                v2 = vigas.get("V2", {}).get("momento_maximo_kNm")
+                if isinstance(v1, (int, float)) and isinstance(v2, (int, float)):
+                    detalle_proyecto.controls.append(ft.Text(
+                        f"Asentamiento {caso.get('asentamiento_cm', '?')} cm | "
+                        f"V1: {v1:.3f} kN·m | V2: {v2:.3f} kN·m"
+                    ))
+            if casos and all("vigas" in c for c in casos):
+                calculos_actuales = casos
+                entradas_actuales = entradas
+                asentamientos.value = ";".join(str(x) for x in entradas)
+                nombre_proyecto.value = proyecto["nombre"]
         detalle_proyecto.visible = True
-        page.update()
-
-        print("Proyecto recuperado correctamente:")
-        print("Nombre:", proyecto["nombre"])
-        print("ID:", proyecto["id"])
-
-        page.snack_bar = ft.SnackBar(
-            content=ft.Text(
-                f"Proyecto '{proyecto['nombre']}' recuperado correctamente"
-            )
-        )
-        page.snack_bar.open = True
         page.update()
 
     vista_historial = ft.Column(
