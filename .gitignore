@@ -1,2 +1,20 @@
-# python
-**/__pycache__
+# Entorno virtual de Python
+.venv/
+venv/
+
+# Archivos temporales de Python
+_pycache_/
+*.pyc
+.pytest_cache/
+
+# Bases de datos locales
+*.db
+*.sqlite
+*.sqlite3
+
+# Reportes generados por la aplicación
+reportes/
+
+# Archivos temporales del sistema
+.DS_Store
+Thumbs.db
