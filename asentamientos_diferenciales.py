@@ -32,6 +32,7 @@ import csv
 
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy.linalg import solve
 
 from pymas import Structure
 
@@ -549,7 +550,7 @@ def resolver_asentamiento(
         - Kfc @ Uc
     )
 
-    Uf = np.linalg.solve(
+    Uf = solve(
         Kff,
         lado_derecho
     )
